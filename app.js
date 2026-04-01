@@ -272,9 +272,13 @@ function renderBar(canvasId, labels, data, label, instanceKey, highlightedLabel 
         'rgba(221, 214, 254, 0.7)' 
     ];
 
+    let hlIdx = -1;
     const backgroundColors = labels.map((l, i) => {
         if (l === "전체") return '#64748b';
-        if (highlightedLabel && l === highlightedLabel) return 'var(--primary)'; 
+        if (highlightedLabel && l === highlightedLabel) {
+            hlIdx = i;
+            return 'rgba(99, 102, 241, 0.8)'; 
+        }
         return pastelColors[(i % pastelColors.length)];
     });
 
@@ -359,7 +363,32 @@ function renderBar(canvasId, labels, data, label, instanceKey, highlightedLabel 
             }
         }]
     });
+
+    // 호흡 애니메이션용 위치 저장
+    vizState[instanceKey].breathingIndex = hlIdx;
 }
+
+// ---------------------------------------------------------
+// [대안 B] 동적 호흡 (Breathing) 애니메이션 글로벌 루프
+// ---------------------------------------------------------
+let breathingAlpha = 0.4;
+let breathingDir = 1;
+setInterval(() => {
+    breathingAlpha += 0.02 * breathingDir;
+    if (breathingAlpha >= 0.95) breathingDir = -1;
+    if (breathingAlpha <= 0.35) breathingDir = 1;
+
+    ['barChartLeft', 'barChartRight'].forEach(key => {
+        const chart = vizState[key];
+        if (chart && chart.breathingIndex !== undefined && chart.breathingIndex !== -1) {
+            const idx = chart.breathingIndex;
+            if (chart.data && chart.data.datasets && chart.data.datasets[0].backgroundColor) {
+                chart.data.datasets[0].backgroundColor[idx] = `rgba(99, 102, 241, ${breathingAlpha.toFixed(2)})`;
+                chart.update('none');
+            }
+        }
+    });
+}, 30);
 
 function updateFilterMenuPosition() {
     if (!activeFilterCol) return;
