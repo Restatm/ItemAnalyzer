@@ -54,7 +54,7 @@ let vizState = {
     lastMx: 0,
     lastMy: 0,
     hoveredPt: null,
-    typeMap: { "정책": -1, "목표": 0, "위험관리": 1, "성과": 2 },
+    typeMap: { "전략": -2, "정책": -1, "목표": 0, "위험관리": 1, "성과": 2 },
     RATE_SCALE: 8.0
 };
 
@@ -138,7 +138,7 @@ function updateSubSelector(filter) {
 
     let options = [];
     if (filter === 'type') {
-        options = ["정책", "목표", "위험관리", "성과"];
+        options = ["전략", "정책", "목표", "위험관리", "성과"];
     } else if (filter === 'cat') {
         options = globalData.categories;
     }
@@ -184,7 +184,7 @@ function initBarCharts() {
         titleRight.textContent = "02. 대분류별 평균 득점률 (전체)";
         
         // 렌더링 (Left: 유형별, Right: 대분류별)
-        const types = ["정책", "목표", "위험관리", "성과"];
+        const types = ["전략", "정책", "목표", "위험관리", "성과"];
         const typeData = types.map(t => getAvg(items.filter(it => it.type === t)));
         const catData = globalData.categories.map(c => getAvg(items.filter(it => it.category === c)));
 
@@ -195,7 +195,7 @@ function initBarCharts() {
         titleLeft.textContent = "유형별 요약 (Overview)";
         titleRight.textContent = `[${selected}] 상세: 대분류별 현황`;
 
-        const types = ["정책", "목표", "위험관리", "성과"];
+        const types = ["전략", "정책", "목표", "위험관리", "성과"];
         const typeData = types.map(t => getAvg(items.filter(it => it.type === t)));
         renderBar('vizBarChartLeft', ["전체", ...types], [getAvg(items), ...typeData], "유형별 평균", 'barChartLeft', selected);
 
@@ -1738,8 +1738,8 @@ function drawViz() {
     ctx.fillText("득점률(Z)", zl.px - 20, zl.py - 3);
 
     // X Ticks
-    const xLabels = {"-1":"정책", "0":"목표", "1":"위험관리", "2":"성과"};
-    [-1, 0, 1, 2].forEach(xv => {
+    const xLabels = {"-2":"전략", "-1":"정책", "0":"목표", "1":"위험관리", "2":"성과"};
+    [-2, -1, 0, 1, 2].forEach(xv => {
         const p = project(xv, ymin, zmin);
         ctx.fillText(xLabels[String(xv)] || "", p.px, p.py + 14);
     });
