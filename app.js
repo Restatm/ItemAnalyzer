@@ -30,9 +30,11 @@ let vizState = {
     // 3D Viz State
     pts: [],
     // Bar Chart Instances
-    barChartType: null,
-    barChartCat: null,
+    barChartLeft: null,
+    barChartRight: null,
     activeTab: '3d',
+    barFilter: 'all', // 'all', 'type', 'cat'
+    selectedSub: null, // 선택된 유형명 또는 대분류명
     categories: [],
     catColors: {
         "노동관행": "#5B7FDB",
@@ -110,29 +112,10 @@ window.addEventListener('scroll', () => {
     updateFilterMenuPosition();
 }, { capture: true, passive: true });
 
-function switchVizTab(tab) {
-    vizState.activeTab = tab;
-    const btn3d = document.getElementById('tab-viz-3d');
-    const btnBar = document.getElementById('tab-viz-bar');
-    const content3d = document.getElementById('viz-3d-content');
-    const contentBar = document.getElementById('viz-bar-content');
-
-    if (tab === '3d') {
-        btn3d.classList.add('active');
-        btnBar.classList.remove('active');
-        content3d.classList.remove('hidden');
-        contentBar.classList.add('hidden');
-        initViz();
-    } else {
-        btn3d.classList.remove('active');
-        btnBar.classList.add('active');
-        content3d.classList.add('hidden');
-        contentBar.classList.remove('hidden');
-        initBarCharts();
-    }
-}
-
 function filterVizBar(filter) {
+    vizState.barFilter = filter;
+    vizState.selectedSub = null; // 필터 변경 시 서브 선택 초기화
+
     const btns = document.querySelectorAll('.btn-viz-bar-filter');
     btns.forEach(btn => {
         btn.classList.add('btn-reset');
@@ -143,18 +126,39 @@ function filterVizBar(filter) {
     activeBtn.classList.remove('btn-reset');
     activeBtn.classList.add('btn-criteria', 'active');
 
-    const wrapperType = document.getElementById('wrapper-viz-bar-type');
-    const wrapperCat = document.getElementById('wrapper-viz-bar-cat');
+    updateSubSelector(filter);
+    initBarCharts();
+}
 
-    if (filter === 'all') {
-        wrapperType.style.display = 'block';
-        wrapperCat.style.display = 'block';
-    } else if (filter === 'type') {
-        wrapperType.style.display = 'block';
-        wrapperCat.style.display = 'none';
-    } else {
-        wrapperType.style.display = 'none';
-        wrapperCat.style.display = 'block';
+function updateSubSelector(filter) {
+    const container = document.getElementById('viz-bar-sub-selector');
+    container.innerHTML = '';
+    
+    if (filter === 'all') return;
+
+    let options = [];
+    if (filter === 'type') {
+        options = ["정책", "목표", "위험관리", "성과"];
+    } else if (filter === 'cat') {
+        options = globalData.categories;
+    }
+
+    options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = `btn btn-small ${vizState.selectedSub === opt ? 'btn-criteria active' : 'btn-reset'}`;
+        btn.textContent = opt;
+        btn.onclick = () => {
+            vizState.selectedSub = opt;
+            updateSubSelector(filter); // 버튼 상태 업데이트용 재호출
+            initBarCharts();
+        };
+        container.appendChild(btn);
+    });
+
+    // 아무것도 선택되지 않았으면 첫 번째 옵션 기본 자동 선택
+    if (!vizState.selectedSub && options.length > 0) {
+        vizState.selectedSub = options[0];
+        updateSubSelector(filter);
     }
 }
 
@@ -162,34 +166,68 @@ function initBarCharts() {
     const items = globalData.items.filter(it => it.maxScore > 0);
     if (items.length === 0) return;
 
-    // 1. 계산
-    const totalAvg = items.reduce((sum, it) => sum + it.scoringRate, 0) / items.length;
+    const filter = vizState.barFilter;
+    const selected = vizState.selectedSub;
 
-    // 유형별 (정책, 목표, 위험관리, 성과)
-    const types = ["정책", "목표", "위험관리", "성과"];
-    const typeData = types.map(t => {
-        const sub = items.filter(it => it.type === t);
-        return sub.length > 0 ? sub.reduce((sum, it) => sum + it.scoringRate, 0) / sub.length : 0;
-    });
+    const titleLeft = document.getElementById('title-viz-bar-left');
+    const titleRight = document.getElementById('title-viz-bar-right');
 
-    // 대분류별
-    const cats = globalData.categories;
-    const catData = cats.map(c => {
-        const sub = items.filter(it => it.category === c);
-        return sub.length > 0 ? sub.reduce((sum, it) => sum + it.scoringRate, 0) / sub.length : 0;
-    });
+    if (filter === 'all') {
+        titleLeft.textContent = "01. 유형별 평균 득점률 (전체)";
+        titleRight.textContent = "02. 대분류별 평균 득점률 (전체)";
+        
+        // 렌더링 (Left: 유형별, Right: 대분류별)
+        const types = ["정책", "목표", "위험관리", "성과"];
+        const typeData = types.map(t => getAvg(items.filter(it => it.type === t)));
+        const catData = globalData.categories.map(c => getAvg(items.filter(it => it.category === c)));
 
-    // 2. 렌더링
-    renderSingleBarChart('vizBarChartType', ["전체 평균", ...types], [totalAvg, ...typeData], "유형별 평균 득점률", totalAvg, 'barChartType');
-    renderSingleBarChart('vizBarChartCat', ["전체 평균", ...cats], [totalAvg, ...catData], "대분류별 평균 득점률", totalAvg, 'barChartCat');
+        renderBar('vizBarChartLeft', ["전체", ...types], [getAvg(items), ...typeData], "유형별 평균", 'barChartLeft');
+        renderBar('vizBarChartRight', ["전체", ...globalData.categories], [getAvg(items), ...catData], "대분류별 평균", 'barChartRight');
+
+    } else if (filter === 'type') {
+        titleLeft.textContent = "유형별 요약 (Overview)";
+        titleRight.textContent = `[${selected}] 상세: 대분류별 현황`;
+
+        const types = ["정책", "목표", "위험관리", "성과"];
+        const typeData = types.map(t => getAvg(items.filter(it => it.type === t)));
+        renderBar('vizBarChartLeft', ["전체", ...types], [getAvg(items), ...typeData], "유형별 평균", 'barChartLeft', selected);
+
+        const subItems = items.filter(it => it.type === selected);
+        const catsInType = [...new Set(subItems.map(it => it.category))];
+        const subData = catsInType.map(c => getAvg(subItems.filter(it => it.category === c)));
+        renderBar('vizBarChartRight', catsInType, subData, "대분류별 평균", 'barChartRight');
+
+    } else if (filter === 'cat') {
+        titleLeft.textContent = "대분류별 요약 (Overview)";
+        titleRight.textContent = `[${selected}] 상세: 문항별 현황`;
+
+        const catData = globalData.categories.map(c => getAvg(items.filter(it => it.category === c)));
+        renderBar('vizBarChartLeft', ["전체", ...globalData.categories], [getAvg(items), ...catData], "대분류별 평균", 'barChartLeft', selected);
+
+        const subItems = items.filter(it => it.category === selected);
+        const subLabels = subItems.map(it => it.id.length > 8 ? it.id.substring(0, 8) + '..' : it.id);
+        const subData = subItems.map(it => it.scoringRate);
+        renderBar('vizBarChartRight', subLabels, subData, "문항별 득점률", 'barChartRight');
+    }
 }
 
-function renderSingleBarChart(canvasId, labels, data, label, totalAvg, instanceKey) {
+function getAvg(arr) {
+    if (arr.length === 0) return 0;
+    return arr.reduce((s, it) => s + it.scoringRate, 0) / arr.length;
+}
+
+function renderBar(canvasId, labels, data, label, instanceKey, highlightedLabel = null) {
     const ctx = document.getElementById(canvasId).getContext('2d');
-    
-    // 파스텔 팔레트
+    const totalAvg = getAvg(globalData.items.filter(it => it.maxScore > 0));
+
+    // 동적 Y축 스케일링
+    const maxVal = Math.max(...data, totalAvg);
+    let yMax = 100;
+    if (maxVal <= 40) yMax = 60;
+    else if (maxVal <= 60) yMax = 80;
+
     const pastelColors = [
-        'rgba(203, 213, 225, 0.7)', // 전체 평균용 (Slate 300)
+        'rgba(148, 163, 184, 0.6)', // base (Slate 400)
         'rgba(252, 165, 165, 0.7)', // Red
         'rgba(147, 197, 253, 0.7)', // Blue
         'rgba(167, 243, 208, 0.7)', // Green
@@ -200,25 +238,24 @@ function renderSingleBarChart(canvasId, labels, data, label, totalAvg, instanceK
         'rgba(221, 214, 254, 0.7)'  // Violet
     ];
 
-    const backgroundColors = labels.map((l, i) => i === 0 ? '#64748b' : pastelColors[((i - 1) % (pastelColors.length - 1)) + 1]);
-    const borderColors = labels.map((l, i) => i === 0 ? '#475569' : backgroundColors[i].replace('0.7', '1'));
+    const backgroundColors = labels.map((l, i) => {
+        if (l === "전체") return '#64748b';
+        if (highlightedLabel && l === highlightedLabel) return 'var(--primary)'; // 선택된 항목 강조
+        return pastelColors[(i % pastelColors.length)];
+    });
 
-    if (vizState[instanceKey]) {
-        vizState[instanceKey].destroy();
-    }
+    if (vizState[instanceKey]) vizState[instanceKey].destroy();
 
     vizState[instanceKey] = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
             datasets: [{
-                label: label,
                 data: data,
                 backgroundColor: backgroundColors,
-                borderColor: borderColors,
-                borderWidth: 1,
+                borderRadius: 6,
                 barPercentage: 0.6,
-                maxBarThickness: 100
+                maxBarThickness: 70
             }]
         },
         options: {
@@ -227,42 +264,37 @@ function renderSingleBarChart(canvasId, labels, data, label, totalAvg, instanceK
             scales: {
                 y: {
                     beginAtZero: true,
-                    max: 100,
-                    ticks: { callback: v => v + '%' },
-                    grid: { color: 'rgba(0,0,0,0.05)' }
+                    max: yMax,
+                    ticks: { callback: v => v + '%', font: { size: 10 } },
+                    grid: { color: 'rgba(0,0,0,0.03)' }
                 },
-                x: {
-                    grid: { display: false }
-                }
+                x: { grid: { display: false }, ticks: { font: { size: 11 } } }
             },
             plugins: {
                 legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: (ctx) => ` ${ctx.raw.toFixed(1)}%`
-                    }
-                }
+                tooltip: { callbacks: { label: (c) => ` ${c.raw.toFixed(1)}%` } }
             }
         },
         plugins: [{
-            id: 'avgLine',
+            id: 'dataLabels',
             afterDraw: (chart) => {
-                const {ctx, chartArea: {left, right, top, bottom}, scales: {y}} = chart;
+                const {ctx, data} = chart;
                 ctx.save();
-                ctx.setLineDash([5, 5]);
-                ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)'; // Red 500
-                ctx.lineWidth = 2;
+                ctx.font = 'bold 11px Pretendard';
+                ctx.fillStyle = '#475569';
+                ctx.textAlign = 'center';
+                chart.getDatasetMeta(0).data.forEach((bar, i) => {
+                    const val = data.datasets[0].data[i].toFixed(1) + '%';
+                    ctx.fillText(val, bar.x, bar.y - 8);
+                });
+                // 가이드선 (전체 평균)
+                if (labels.includes("전체")) return; // 요약 차트에는 이미 전체가 포함됨
+                const {chartArea: {left, right}, scales: {y}} = chart;
                 const yPos = y.getPixelForValue(totalAvg);
-                ctx.beginPath();
-                ctx.moveTo(left, yPos);
-                ctx.lineTo(right, yPos);
-                ctx.stroke();
-
-                // 텍스트 라벨
-                ctx.fillStyle = '#ef4444';
-                ctx.font = 'bold 12px Pretendard';
-                ctx.textAlign = 'right';
-                ctx.fillText(`전체 평균: ${totalAvg.toFixed(1)}%`, right, yPos - 8);
+                ctx.setLineDash([5, 5]);
+                ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(left, yPos); ctx.lineTo(right, yPos); ctx.stroke();
                 ctx.restore();
             }
         }]

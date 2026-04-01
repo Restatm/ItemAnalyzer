@@ -490,21 +490,33 @@
 
                     <!-- Bar Chart Section -->
                     <div id="viz-bar-content" class="hidden">
-                        <div style="margin-bottom: 2rem; display: flex; gap: 0.75rem;">
+                        <div style="margin-bottom: 1.5rem; display: flex; gap: 0.75rem; align-items: center;">
+                            <span style="font-weight: 600; color: #64748b; font-size: 0.9rem; margin-right: 0.5rem;">보기 모드:</span>
                             <button class="btn btn-small btn-criteria btn-viz-bar-filter active" id="btn-viz-bar-all" onclick="filterVizBar('all')">전체</button>
                             <button class="btn btn-small btn-reset btn-viz-bar-filter" id="btn-viz-bar-type" onclick="filterVizBar('type')">유형별</button>
                             <button class="btn btn-small btn-reset btn-viz-bar-filter" id="btn-viz-bar-cat" onclick="filterVizBar('cat')">대분류별</button>
                         </div>
-                        <div id="viz-bar-charts-container" style="display: flex; flex-direction: column; gap: 3rem;">
-                            <div id="wrapper-viz-bar-type" style="height: 450px;">
-                                <h4 style="margin-bottom: 1rem; color: #475569;">01. 개괄 - 유형별 평균 득점률</h4>
-                                <canvas id="vizBarChartType"></canvas>
+                        
+                        <!-- 하위 선택 박스 (유형 또는 대분류 버튼들이 동적으로 생성됨) -->
+                        <div id="viz-bar-sub-selector" style="margin-bottom: 1.5rem; min-height: 40px; display: flex; flex-wrap: wrap; gap: 0.6rem;"></div>
+
+                        <div id="viz-bar-charts-container" style="display: flex; gap: 1.5rem; align-items: flex-start;">
+                            <!-- LEFT: Overview Chart -->
+                            <div id="wrapper-viz-bar-left" style="flex: 1; height: 520px; background: #f8fafc; border-radius: 16px; padding: 1.75rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);">
+                                <h4 id="title-viz-bar-left" style="margin-bottom: 1.25rem; color: #475569; font-size: 1.1rem; border-left: 4px solid var(--primary); padding-left: 0.75rem;">요약 분석</h4>
+                                <div style="height: calc(100% - 40px);">
+                                    <canvas id="vizBarChartLeft"></canvas>
+                                </div>
                             </div>
-                            <div id="wrapper-viz-bar-cat" style="height: 450px;">
-                                <h4 style="margin-bottom: 1rem; color: #475569;">02. 개괄 - 대분류별 평균 득점률</h4>
-                                <canvas id="vizBarChartCat"></canvas>
+                            <!-- RIGHT: Detail Chart -->
+                            <div id="wrapper-viz-bar-right" style="flex: 1; height: 520px; background: #f8fafc; border-radius: 16px; padding: 1.75rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);">
+                                <h4 id="title-viz-bar-right" style="margin-bottom: 1.25rem; color: #475569; font-size: 1.1rem; border-left: 4px solid var(--primary); padding-left: 0.75rem;">상세 분석</h4>
+                                <div style="height: calc(100% - 40px);">
+                                    <canvas id="vizBarChartRight"></canvas>
+                                </div>
                             </div>
                         </div>
+                        <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 1.5rem; text-align: center;">* 개별 문항의 산술 평균값이며, '계정 후 득점률' 시물레이션 결과가 실시간으로 반영됩니다.</div>
                     </div>
                 </section>
             </div>
