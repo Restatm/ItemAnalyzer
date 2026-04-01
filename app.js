@@ -163,8 +163,15 @@ function updateSubSelector(filter) {
 }
 
 function initBarCharts() {
+    if (!globalData.items || globalData.items.length === 0) {
+        alert("데이터가 없습니다. 먼저 엑셀 파일을 업로드해 주세요.");
+        return;
+    }
     const items = globalData.items.filter(it => it.maxScore > 0);
-    if (items.length === 0) return;
+    if (items.length === 0) {
+        alert("분석 가능한 유효 문항(시범 문항 제외)이 없습니다.");
+        return;
+    }
 
     const filter = vizState.barFilter;
     const selected = vizState.selectedSub;
@@ -280,21 +287,37 @@ function renderBar(canvasId, labels, data, label, instanceKey, highlightedLabel 
             afterDraw: (chart) => {
                 const {ctx, data} = chart;
                 ctx.save();
-                ctx.font = 'bold 11px Pretendard';
+                ctx.font = 'bold 11px sans-serif';
                 ctx.fillStyle = '#475569';
                 ctx.textAlign = 'center';
-                chart.getDatasetMeta(0).data.forEach((bar, i) => {
-                    const val = data.datasets[0].data[i].toFixed(1) + '%';
-                    ctx.fillText(val, bar.x, bar.y - 8);
-                });
+
+                const meta = chart.getDatasetMeta(0);
+                if (meta && meta.data) {
+                    meta.data.forEach((bar, i) => {
+                        const valRaw = data.datasets[0].data[i];
+                        if (valRaw !== undefined && valRaw !== null) {
+                            const val = valRaw.toFixed(1) + '%';
+                            ctx.fillText(val, bar.x, bar.y - 8);
+                        }
+                    });
+                }
+
                 // 가이드선 (전체 평균)
-                if (labels.includes("전체")) return; // 요약 차트에는 이미 전체가 포함됨
-                const {chartArea: {left, right}, scales: {y}} = chart;
-                const yPos = y.getPixelForValue(totalAvg);
-                ctx.setLineDash([5, 5]);
-                ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
-                ctx.lineWidth = 1.5;
-                ctx.beginPath(); ctx.moveTo(left, yPos); ctx.lineTo(right, yPos); ctx.stroke();
+                if (labels.includes("전체")) {
+                    ctx.restore();
+                    return;
+                }
+                
+                const {chartArea, scales} = chart;
+                if (chartArea && scales && scales.y) {
+                    const {left, right} = chartArea;
+                    const {y} = scales;
+                    const yPos = y.getPixelForValue(totalAvg);
+                    ctx.setLineDash([5, 5]);
+                    ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath(); ctx.moveTo(left, yPos); ctx.lineTo(right, yPos); ctx.stroke();
+                }
                 ctx.restore();
             }
         }]
@@ -924,9 +947,7 @@ window.closeSim = function () {
 
 window.openViz = function() {
     currentViewMode = 'VIZ';
-    viewList.classList.add('hidden');
-    viewSim.classList.add('hidden');
-    document.getElementById('view-viz').classList.remove('hidden');
+    showView('view-viz');
     
     // Update card styles
     document.getElementById('card-viz-items').style.borderColor = 'var(--primary)';
@@ -936,7 +957,40 @@ window.openViz = function() {
     document.getElementById('card-flagged-items').style.borderColor = 'var(--border)';
     document.getElementById('card-flagged-items').style.borderWidth = '1px';
     
-    initViz();
+    switchVizTab(vizState.activeTab);
+}
+
+function showView(viewId) {
+    const views = ['view-list', 'view-sim', 'view-viz', 'upload-section'];
+    views.forEach(v => {
+        const el = document.getElementById(v);
+        if (el) el.classList.add('hidden');
+    });
+    const target = document.getElementById(viewId);
+    if (target) target.classList.remove('hidden');
+}
+
+function switchVizTab(tab) {
+    vizState.activeTab = tab;
+    // UI - Buttons
+    const btn3d = document.getElementById('tab-viz-3d');
+    const btnBar = document.getElementById('tab-viz-bar');
+    if (btn3d) btn3d.classList.toggle('active', tab === '3d');
+    if (btnBar) btnBar.classList.toggle('active', tab === 'bar');
+
+    // UI - Content Divs
+    const cont3d = document.getElementById('viz-3d-content');
+    const contBar = document.getElementById('viz-bar-content');
+    
+    if (tab === '3d') {
+        if (cont3d) cont3d.classList.remove('hidden');
+        if (contBar) contBar.classList.add('hidden');
+        initViz();
+    } else {
+        if (cont3d) cont3d.classList.add('hidden');
+        if (contBar) contBar.classList.remove('hidden');
+        filterVizBar(vizState.barFilter);
+    }
 }
 
 window.closeViz = function() {
@@ -1351,10 +1405,7 @@ function renderCVChart(baseCvs, simCvs = null) {
 
 // ── 3D Visualization Implementation ──
 
-function openViz() {
-    showView('view-viz');
-    switchVizTab(vizState.activeTab); 
-}
+
 
 function initViz() {
     if (!vizState.canvas) {
