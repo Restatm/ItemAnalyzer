@@ -246,11 +246,19 @@ function renderBar(canvasId, labels, data, label, instanceKey, highlightedLabel 
     if (maxVal <= 40) yMax = 60;
     else if (maxVal <= 60) yMax = 80;
 
-    // 겹침 방지 동적 폰트 사이즈
-    let fontSize = 11;
-    const maxChars = Math.max(...labels.map(l => String(l).length));
-    if (maxChars >= 8) fontSize = 10;
-    if (maxChars >= 12) fontSize = 9;
+    // 분할된 라벨의 최대 줄 길이를 기준으로 글자 크기 유동 조정 (겹침 방지)
+    let fontSize = 12; // 기본 폰트 사이즈 키움
+    let maxLineChars = 0;
+    formattedLabels.forEach(label => {
+        if (Array.isArray(label)) {
+            label.forEach(line => { if (line.length > maxLineChars) maxLineChars = line.length; });
+        } else {
+            if (String(label).length > maxLineChars) maxLineChars = String(label).length;
+        }
+    });
+
+    if (maxLineChars >= 7) fontSize = 11;
+    if (maxLineChars >= 9) fontSize = 10;
 
     const pastelColors = [
         'rgba(148, 163, 184, 0.6)', 
