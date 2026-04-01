@@ -3,6 +3,7 @@ let globalData = {
     items: [], // Array of item objects
     companies: [],
     categories: [],
+    typeList: [], // Dynamically ordered types
     cvScores: {} // CV by category
 };
 
@@ -54,7 +55,8 @@ let vizState = {
     lastMx: 0,
     lastMy: 0,
     hoveredPt: null,
-    typeMap: { "전략": -2, "정책": -1, "목표": 0, "위험관리": 1, "성과": 2 },
+    typeMap: {},
+    typeList: [],
     RATE_SCALE: 8.0
 };
 
@@ -138,7 +140,7 @@ function updateSubSelector(filter) {
 
     let options = [];
     if (filter === 'type') {
-        options = ["전략", "정책", "목표", "위험관리", "성과"];
+        options = globalData.typeList || [];
     } else if (filter === 'cat') {
         options = globalData.categories;
     }
@@ -184,7 +186,7 @@ function initBarCharts() {
         titleRight.textContent = "02. 대분류별 평균 득점률 (전체)";
         
         // 렌더링 (Left: 유형별, Right: 대분류별)
-        const types = ["전략", "정책", "목표", "위험관리", "성과"];
+        const types = globalData.typeList || [];
         const typeData = types.map(t => getAvg(items.filter(it => it.type === t)));
         const catData = globalData.categories.map(c => getAvg(items.filter(it => it.category === c)));
 
@@ -195,7 +197,7 @@ function initBarCharts() {
         titleLeft.textContent = "유형별 요약 (Overview)";
         titleRight.textContent = `[${selected}] 상세: 대분류별 현황`;
 
-        const types = ["전략", "정책", "목표", "위험관리", "성과"];
+        const types = globalData.typeList || [];
         const typeData = types.map(t => getAvg(items.filter(it => it.type === t)));
         renderBar('vizBarChartLeft', ["전체", ...types], [getAvg(items), ...typeData], "유형별 평균", 'barChartLeft', selected);
 
@@ -729,6 +731,24 @@ function parseData(rows) {
     globalData.items = items;
     globalData.companies = companies;
     globalData.categories = categories;
+
+    let validItems = items.filter(it => it.maxScore > 0);
+    let typeStats = {};
+    validItems.forEach(it => {
+        if (!typeStats[it.type]) typeStats[it.type] = { sum: 0, count: 0 };
+        typeStats[it.type].sum += it.maxScore;
+        typeStats[it.type].count++;
+    });
+    
+    let typeAverages = [];
+    for (let t in typeStats) {
+        typeAverages.push({ type: t, avg: typeStats[t].sum / typeStats[t].count });
+    }
+    typeAverages.sort((a, b) => {
+        if (a.avg !== b.avg) return a.avg - b.avg;
+        return a.type.localeCompare(b.type, 'ko-KR'); 
+    });
+    globalData.typeList = typeAverages.map(ta => ta.type);
 
     globalData.cvScores = calculateCV(globalData.items);
 }
@@ -1521,12 +1541,19 @@ function initViz() {
     
     // Prepare Data (Filter out Trial Items: maxScore > 0)
     const items = globalData.items.filter(it => it.maxScore > 0);
+    
+    vizState.typeList = globalData.typeList || [];
+    vizState.typeMap = {};
+    vizState.typeList.forEach((typeName, idx) => {
+        vizState.typeMap[typeName] = idx;
+    });
+
     const typeMap = vizState.typeMap;
     const RATE_SCALE = vizState.RATE_SCALE;
     
     vizState.pts = items.map(d => ({
         ...d,
-        x: typeMap[d.type] !== undefined ? typeMap[d.type] : 2.5, // Default for unknown types
+        x: typeMap[d.type] !== undefined ? typeMap[d.type] : 0, 
         y: d.maxScore,
         z: (d.scoringRate / 100) * RATE_SCALE
     }));
@@ -1630,7 +1657,8 @@ function resizeViz() {
 }
 
 function project(x3, y3, z3) {
-    const xmin=-1, xmax=2, ymin=0, ymax=7, zmin=0, zmax=vizState.RATE_SCALE;
+    const typeCount = vizState.typeList ? vizState.typeList.length : 1;
+    const xmin = 0, xmax = Math.max(1, typeCount - 1), ymin=0, ymax=7, zmin=0, zmax=vizState.RATE_SCALE;
     
     const norm = (v, mn, mx) => (v - mn) / (mx - mn);
     const nx = (norm(x3, xmin, xmax) - 0.5) * 2;
@@ -1674,10 +1702,14 @@ function drawViz() {
     ctx.lineWidth = 0.8;
     ctx.setLineDash([4, 4]);
 
-    const xmin=-1, xmax=2, ymin=0, ymax=7, zmin=0, zmax=vizState.RATE_SCALE;
+    const typeCount = vizState.typeList ? vizState.typeList.length : 1;
+    const xmin = 0, xmax = Math.max(1, typeCount - 1), ymin=0, ymax=7, zmin=0, zmax=vizState.RATE_SCALE;
+
+    const xGridVals = [];
+    for (let i = 0; i < typeCount; i++) xGridVals.push(i);
 
     // X Grids
-    [-1, 0, 1, 2].forEach(xv => {
+    xGridVals.forEach(xv => {
         const p0 = project(xv, ymin, zmin);
         const p1 = project(xv, ymax, zmin);
         const p2 = project(xv, ymin, zmax);
@@ -1738,10 +1770,10 @@ function drawViz() {
     ctx.fillText("득점률(Z)", zl.px - 20, zl.py - 3);
 
     // X Ticks
-    const xLabels = {"-2":"전략", "-1":"정책", "0":"목표", "1":"위험관리", "2":"성과"};
-    [-2, -1, 0, 1, 2].forEach(xv => {
+    xGridVals.forEach(xv => {
         const p = project(xv, ymin, zmin);
-        ctx.fillText(xLabels[String(xv)] || "", p.px, p.py + 14);
+        const labelStr = vizState.typeList && vizState.typeList[xv] ? vizState.typeList[xv] : "";
+        ctx.fillText(labelStr, p.px, p.py + 14);
     });
 
     // Y Ticks
