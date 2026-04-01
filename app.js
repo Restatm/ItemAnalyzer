@@ -273,13 +273,21 @@ function renderBar(canvasId, labels, data, label, instanceKey, highlightedLabel 
     ];
 
     let hlIdx = -1;
+    let hlBaseRGB = '99, 102, 241';
     const backgroundColors = labels.map((l, i) => {
         if (l === "전체") return '#64748b';
+        
+        const originalColor = pastelColors[(i % pastelColors.length)];
+        
         if (highlightedLabel && l === highlightedLabel) {
             hlIdx = i;
-            return 'rgba(99, 102, 241, 0.8)'; 
+            const match = originalColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if (match) {
+                hlBaseRGB = `${match[1]}, ${match[2]}, ${match[3]}`;
+            }
+            return `rgba(${hlBaseRGB}, 0.8)`; 
         }
-        return pastelColors[(i % pastelColors.length)];
+        return originalColor;
     });
 
     if (vizState[instanceKey]) vizState[instanceKey].destroy();
@@ -366,6 +374,7 @@ function renderBar(canvasId, labels, data, label, instanceKey, highlightedLabel 
 
     // 호흡 애니메이션용 위치 저장
     vizState[instanceKey].breathingIndex = hlIdx;
+    vizState[instanceKey].breathingBaseRGB = hlBaseRGB;
 }
 
 // ---------------------------------------------------------
@@ -382,8 +391,9 @@ setInterval(() => {
         const chart = vizState[key];
         if (chart && chart.breathingIndex !== undefined && chart.breathingIndex !== -1) {
             const idx = chart.breathingIndex;
+            const rgb = chart.breathingBaseRGB || '99, 102, 241';
             if (chart.data && chart.data.datasets && chart.data.datasets[0].backgroundColor) {
-                chart.data.datasets[0].backgroundColor[idx] = `rgba(99, 102, 241, ${breathingAlpha.toFixed(2)})`;
+                chart.data.datasets[0].backgroundColor[idx] = `rgba(${rgb}, ${breathingAlpha.toFixed(2)})`;
                 chart.update('none');
             }
         }
