@@ -223,9 +223,22 @@ function getAvg(arr) {
     return arr.reduce((s, it) => s + it.scoringRate, 0) / arr.length;
 }
 
+function formatLabel(str) {
+    if (str === null || str === undefined) return "";
+    const s = String(str);
+    if (!s.includes(' ')) return s;
+    const words = s.split(' ');
+    if (words.length <= 1) return s;
+    const mid = Math.ceil(words.length / 2);
+    return [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
+}
+
 function renderBar(canvasId, labels, data, label, instanceKey, highlightedLabel = null) {
     const ctx = document.getElementById(canvasId).getContext('2d');
     const totalAvg = getAvg(globalData.items.filter(it => it.maxScore > 0));
+
+    // 대분류/유형명 가로 배치 및 2줄 처리를 위한 포맷팅
+    const formattedLabels = labels.map(l => formatLabel(l));
 
     // 동적 Y축 스케일링
     const maxVal = Math.max(...data, totalAvg);
@@ -233,21 +246,27 @@ function renderBar(canvasId, labels, data, label, instanceKey, highlightedLabel 
     if (maxVal <= 40) yMax = 60;
     else if (maxVal <= 60) yMax = 80;
 
+    // 겹침 방지 동적 폰트 사이즈
+    let fontSize = 11;
+    const maxChars = Math.max(...labels.map(l => String(l).length));
+    if (maxChars >= 8) fontSize = 10;
+    if (maxChars >= 12) fontSize = 9;
+
     const pastelColors = [
-        'rgba(148, 163, 184, 0.6)', // base (Slate 400)
-        'rgba(252, 165, 165, 0.7)', // Red
-        'rgba(147, 197, 253, 0.7)', // Blue
-        'rgba(167, 243, 208, 0.7)', // Green
-        'rgba(254, 240, 138, 0.7)', // Yellow
-        'rgba(245, 208, 254, 0.7)', // Fuchsia
-        'rgba(253, 230, 138, 0.7)', // Amber
-        'rgba(199, 210, 254, 0.7)', // Indigo
-        'rgba(221, 214, 254, 0.7)'  // Violet
+        'rgba(148, 163, 184, 0.6)', 
+        'rgba(252, 165, 165, 0.7)', 
+        'rgba(147, 197, 253, 0.7)', 
+        'rgba(167, 243, 208, 0.7)', 
+        'rgba(254, 240, 138, 0.7)', 
+        'rgba(245, 208, 254, 0.7)', 
+        'rgba(253, 230, 138, 0.7)', 
+        'rgba(199, 210, 254, 0.7)', 
+        'rgba(221, 214, 254, 0.7)' 
     ];
 
     const backgroundColors = labels.map((l, i) => {
         if (l === "전체") return '#64748b';
-        if (highlightedLabel && l === highlightedLabel) return 'var(--primary)'; // 선택된 항목 강조
+        if (highlightedLabel && l === highlightedLabel) return 'var(--primary)'; 
         return pastelColors[(i % pastelColors.length)];
     });
 
@@ -256,7 +275,7 @@ function renderBar(canvasId, labels, data, label, instanceKey, highlightedLabel 
     vizState[instanceKey] = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels,
+            labels: formattedLabels,
             datasets: [{
                 data: data,
                 backgroundColor: backgroundColors,
@@ -275,7 +294,15 @@ function renderBar(canvasId, labels, data, label, instanceKey, highlightedLabel 
                     ticks: { callback: v => v + '%', font: { size: 10 } },
                     grid: { color: 'rgba(0,0,0,0.03)' }
                 },
-                x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+                x: { 
+                    grid: { display: false }, 
+                    ticks: { 
+                        font: { size: fontSize },
+                        maxRotation: 0,
+                        minRotation: 0,
+                        autoSkip: false
+                    } 
+                }
             },
             plugins: {
                 legend: { display: false },
@@ -287,7 +314,7 @@ function renderBar(canvasId, labels, data, label, instanceKey, highlightedLabel 
             afterDraw: (chart) => {
                 const {ctx, data} = chart;
                 ctx.save();
-                ctx.font = 'bold 11px sans-serif';
+                ctx.font = `bold ${fontSize}px sans-serif`;
                 ctx.fillStyle = '#475569';
                 ctx.textAlign = 'center';
 
@@ -303,7 +330,9 @@ function renderBar(canvasId, labels, data, label, instanceKey, highlightedLabel 
                 }
 
                 // 가이드선 (전체 평균)
-                if (labels.includes("전체")) {
+                // 1차원 배열로 변환하여 "전체" 포함 여부 확인 (다중행 대응)
+                const flatLabels = labels.map(l => l.toString());
+                if (flatLabels.includes("전체")) {
                     ctx.restore();
                     return;
                 }
