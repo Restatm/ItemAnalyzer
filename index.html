@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>모형개정 문항 자동 추출 시스템</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SheetJS (Excel Parser) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-color: #f5f3ff;
+            --surface: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --radius: 12px;
+            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.025);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scrollbar-gutter: stable; }
+        body { font-family: 'Pretendard', sans-serif; background-color: var(--bg-color); color: var(--text-main); line-height: 1.6; }
+        .app-container { max-width: 1600px; margin: 0 auto; padding: 2rem; }
+        .app-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+        .logo h1 { font-size: 2.1rem; font-weight: 800; background: linear-gradient(135deg, #6366f1, #a855f7, #d946ef); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .hidden { display: none !important; }
+        .card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 2rem; border: 1px solid rgba(255, 255, 255, 0.5); }
+        .drop-zone { border: 2px dashed var(--primary); border-radius: var(--radius); padding: 4rem 2rem; text-align: center; cursor: pointer; transition: 0.2s; }
+        .drop-zone:hover { background-color: rgba(79, 70, 229, 0.05); }
+        .dashboard-grid { display: grid; grid-template-columns: 0.72fr 1.2fr 0.8fr 0.77fr 0.81fr; gap: 1.2rem; margin-bottom: 2rem; }
+        .stat-card { background: var(--surface); padding: 1.2rem 1.5rem 1.2rem 2.2rem; border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--border); transition: all 0.2s ease; cursor: pointer; }
+        .stat-card:hover { background-color: #f8fafc; border-color: var(--primary) !important; transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .stat-card .stat-title { font-size: 1.2rem; font-weight: 700; color: #6d28d9; margin-bottom: 0.5rem; }
+        .stat-card .stat-value { font-size: 2.5rem; font-weight: 700; display: flex; align-items: center; gap: 14px; line-height: 1; margin-top: 0.6rem; }
+        .stat-badge { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 600; padding: 5px 10px; border-radius: 8px; background: #ede9fe; color: #6d28d9; white-space: nowrap; line-height: 1.2; min-width: 62px; position: relative; top: -1px; }
+        .stat-badge .badge-val { font-size: 0.95rem; display: block; font-weight: 800; margin-top: 2px; }
+        .content-split { display: flex; gap: 2rem; align-items: flex-start; }
+        .flex-2 { flex: 2; } .flex-1 { flex: 1; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 1rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        th { background-color: #f1f5f9; font-weight: 600; color: var(--text-muted); font-size: 0.85rem; position: sticky; top: 0; z-index: 10; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; font-weight: 500; cursor: pointer; border: none; transition: 0.2s; }
+        .btn-primary { background-color: var(--primary); color: white; transition: background 0.3s; }
+        .btn-primary:hover { background: linear-gradient(135deg, #6366f1, #a855f7, #d946ef); }
+        .btn-small { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+        .btn-sim-action { width: 140px; } /* 버튼 크기 통일 */
+        .btn-trial { background: #e2e8f0; color: #64748b; cursor: pointer; transition: 0.2s; }
+        .btn-trial:hover { background: #cbd5e1; color: #475569; }
+        .score-selector { display: flex; gap: 0.5rem; }
+        .score-btn { flex: 1; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-weight: 600; background: white; transition: all 0.3s; }
+        .score-btn:hover { background: linear-gradient(135deg, #6366f1, #a855f7, #d946ef); color: white; border-color: transparent; }
+        .score-btn.active { background: var(--primary); color: white; border-color: transparent; }
+        
+        .btn-criteria {
+            background-color: #a855f7;
+            color: white;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+        .btn-criteria:hover {
+            background: linear-gradient(135deg, #6366f1, #a855f7, #d946ef);
+            color: white;
+            border-color: transparent;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
+        }
+        .btn-reset {
+            background-color: #f1f5f9;
+            color: #64748b;
+            border: 1px solid #cbd5e1;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+        .btn-reset:hover {
+            background: linear-gradient(135deg, #6366f1, #a855f7, #d946ef);
+            color: white;
+            border-color: transparent;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
+        }
+        .dist-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }
+        .dist-card { border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.75rem; text-align: center; background: #fafafa; position: relative; }
+        .dist-card.removed { opacity: 0.4; }
+        .dist-card .remove-opt-btn { background: #fef2f2; border: 1px solid #fca5a5; color: #ef4444; border-radius: 4px; cursor: pointer; }
+        .dist-card .btn-del { transition: all 0.2s; }
+        .dist-card .btn-del:hover { background: #fca5a5 !important; color: #991b1b !important; border-color: #ef4444 !important; }
+        .dist-card .btn-restore { transition: all 0.2s; }
+        .dist-card .btn-restore:hover { background: #7dd3fc !important; color: #0c4a6e !important; border-color: #0284c7 !important; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; }
+        .warning { background-color: #fef3c7; color: var(--warning); }
+        .chart-container { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+        .highlight-red { color: var(--danger); font-weight: bold; }
+        
+        .filter-select {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            padding: 0;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            background-color: #f8fafc;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: 9px;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s;
+            flex-shrink: 0;
+            vertical-align: middle;
+        }
+        .filter-select:hover {
+            background-color: transparent;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23ffffff%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: 9px;
+            background-origin: border-box;
+            background: linear-gradient(135deg, #6366f1, #a855f7, #d946ef);
+            border-color: transparent;
+            box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
+        }
+        .filter-select.active-filter {
+            background-color: transparent;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23ffffff%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: 9px;
+            background-origin: border-box;
+            background: linear-gradient(135deg, #6366f1, #a855f7, #d946ef);
+            border-color: transparent;
+            box-shadow: 0 2px 5px rgba(168, 85, 247, 0.2);
+        }
+
+        /* Multi-select Dropdown Layer */
+        .filter-menu {
+            position: fixed;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            min-width: 200px;
+            max-width: 280px;
+            z-index: 5000;
+            padding: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            border: 1px solid #e2e8f0;
+            animation: fadeIn 0.1s ease-out;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .filter-menu-search {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            outline: none;
+            margin-bottom: 0.25rem;
+        }
+        .filter-menu-search:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1); }
+        
+        .filter-menu-list {
+            max-height: 250px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            padding-right: 4px;
+        }
+        .filter-menu-list::-webkit-scrollbar { width: 5px; }
+        .filter-menu-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        .filter-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0.4rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: #334155;
+            transition: 0.15s;
+        }
+        .filter-item:hover { background-color: #f1f5f9; }
+        .filter-item input { width: 14px; height: 14px; cursor: pointer; }
+        
+        .filter-menu-btns {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid #f1f5f9;
+        }
+        .filter-btn { flex: 1; padding: 0.4rem; font-size: 0.8rem; font-weight: 600; border-radius: 5px; cursor: pointer; border: none; }
+        .filter-btn-ok { background: var(--primary); color: white; }
+        .filter-btn-ok:hover { background: linear-gradient(135deg, #6366f1, #a855f7, #d946ef); }
+        .filter-btn-cancel { background: #f1f5f9; color: #64748b; }
+        .filter-btn-cancel:hover { background: #e2e8f0; }
+
+        /* Visualization Styles */
+        #canvas-wrap { position: relative; width: 100%; margin-top: 1rem; }
+        canvas#vizCanvas { display: block; width: 100%; cursor: grab; background: #fff; border: 1px solid var(--border); border-radius: 10px; }
+        canvas#vizCanvas:active { cursor: grabbing; }
+        #viz-tooltip {
+            position: absolute;
+            pointer-events: none;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #1a1a1a;
+            display: none;
+            max-width: 200px;
+            line-height: 1.6;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            z-index: 100;
+        }
+        .viz-cat-btn {
+            padding: 5px 12px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            background: #fff;
+            color: var(--text-main);
+            transition: all 0.15s;
+            margin-right: 6px;
+            margin-bottom: 6px;
+        }
+        .viz-cat-btn:hover { background: #f1f5f9; }
+        .viz-cat-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: transparent;
+            font-weight: 500;
+        }
+        #viz-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; font-size: 11px; color: #64748b; }
+        .leg-item { display: flex; align-items: center; gap: 5px; }
+        .leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        #viz-axis-info { margin-top: 10px; font-size: 11px; color: #94a3b8; display: flex; gap: 16px; flex-wrap: wrap; }
+        
+        /* TOP Button Style */
+        .btn-top { 
+            position: fixed; 
+            top: 50%; 
+            right: 30px; 
+            width: 50px; 
+            height: 50px; 
+            background-color: var(--primary); 
+            color: white; 
+            border: none; 
+            border-radius: 8px; 
+            font-weight: 700; 
+            cursor: pointer; 
+            display: none; 
+            align-items: center; 
+            justify-content: center; 
+            box-shadow: 0 4px 15px rgba(109, 40, 217, 0.3); 
+            z-index: 1000; 
+            opacity: 0.8;
+            transform: translateY(-50%);
+            transition: all 0.3s ease;
+            animation: float 2s ease-in-out infinite; /* 부유 애니메이션 */
+        }
+        .btn-top:hover { 
+            opacity: 1; 
+            right: 35px;
+            background: linear-gradient(135deg, #6366f1, #a855f7, #d946ef); 
+            box-shadow: 0 8px 25px rgba(168, 85, 247, 0.4);
+        }
+        /* 돌아가기 버튼 전용 스타일 */
+        .btn-back-custom {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #cbd5e1;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .btn-back-custom:hover {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            color: white;
+            border-color: transparent !important;
+            transform: translateX(-3px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(-50%); }
+            50% { transform: translateY(-70%); } /* 위로 살짝 떠오름 */
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo"><h1>Item Analyzer</h1></div>
+            <p>모형개정 검토 시뮬레이터</p>
+        </header>
+
+        <main>
+            <section id="upload-section" class="card">
+                <h2>데이터 업로드</h2>
+                <div class="drop-zone" id="drop-zone">
+                    <p><strong>수정된 양식의 평가결과.xlsx</strong> 파일을 드롭하거나 클릭하세요 (문항 번호 / 유형 / 만점행 추가판)</p>
+                    <input type="file" id="file-input" accept=".xlsx, .xls" class="hidden">
+                </div>
+                <div id="loading" class="hidden" style="text-align:center; padding: 2rem;">로딩 중...</div>
+            </section>
+
+            <div id="app-dashboard" class="hidden">
+                <div class="dashboard-grid">
+                    <div class="stat-card" id="card-total-items" style="border-color: var(--primary); border-width: 2px;">
+                        <div class="stat-title">전체 문항</div>
+                        <div class="stat-value" id="stat-total-items" style="font-size: 2.5rem; font-weight: 700;">0</div>
+                    </div>
+                    <div class="stat-card" id="card-flagged-items">
+                        <div class="stat-title">검토 대상 문항</div>
+                        <div class="stat-value" id="stat-flagged-items" style="font-size: 2.5rem; font-weight: 700; color: var(--danger)">0</div>
+                    </div>
+                    <div class="stat-card" id="card-viz-items">
+                        <div class="stat-title">데이터 시각화</div>
+                        <div class="stat-value" style="font-size: 2.5rem; font-weight: 700; color: var(--primary);">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-top: -5px;"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                            VIEW
+                        </div>
+                    </div>
+                    <div class="stat-card" id="card-participants">
+                        <div class="stat-title">참여 기업 수</div>
+                        <div id="stat-total-companies" class="stat-value" style="font-size: 2.5rem; font-weight: 700;">0</div>
+                    </div>
+                    <div class="stat-card" id="card-add-item" style="border-style: dashed; border-color: #a855f7; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #faf5ff;">
+                        <div class="stat-title" style="color: #a855f7;">신규 문항 추가</div>
+                        <div class="stat-value" style="font-size: 2.2rem; color: #a855f7;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LIST VIEW -->
+                <section id="view-list" class="card" style="margin-top: 1rem;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:1.5rem; align-items:center;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <h2 id="table-title" style="margin: 0;">문항 전체</h2>
+                            <button class="btn btn-small btn-criteria" onclick="openCriteriaModal()">문항 판단 기준</button>
+                            <button class="btn btn-small btn-reset" id="btn-reset-filters">필터 해제</button>
+                        </div>
+                        <div>
+                            <label style="margin-right: 1rem;"><input type="checkbox" id="filter-high" checked> 난이도 상</label>
+                            <label style="margin-right: 1rem;"><input type="checkbox" id="filter-low" checked> 난이도 하</label>
+                            <label><input type="checkbox" id="filter-polar" checked> 양극화</label>
+                        </div>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="min-width: 120px;">
+                                        <div style="display: flex; align-items: center; gap: 6px; justify-content: flex-start;">
+                                            <span>대분류</span>
+                                            <div id="filter-col-cat" class="filter-select" data-col="columnCat"></div>
+                                        </div>
+                                    </th>
+                                    <th style="min-width: 140px;">
+                                        <div style="display: flex; align-items: center; gap: 6px; justify-content: flex-start;">
+                                            <span>유형</span>
+                                            <div id="filter-col-type" class="filter-select" data-col="columnType"></div>
+                                        </div>
+                                    </th>
+                                    <th style="min-width: 80px;">문항ID</th>
+                                    <th style="min-width: 90px;">
+                                        <div style="display: flex; align-items: center; gap: 6px; justify-content: flex-start;">
+                                            <span>만점</span>
+                                            <div id="filter-col-score" class="filter-select" data-col="columnScore"></div>
+                                        </div>
+                                    </th>
+                                    <th style="min-width: 80px;">득점률</th>
+                                    <th style="min-width: 80px;">양극화</th>
+                                    <th style="min-width: 250px;">
+                                        <div style="display: flex; align-items: center; gap: 6px; justify-content: flex-start;">
+                                            <span>검토 사유</span>
+                                            <div id="filter-col-reason" class="filter-select" data-col="columnReason"></div>
+                                        </div>
+                                    </th>
+                                    <th style="width: 150px;">액션</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- SIMULATION VIEW -->
+                <section id="view-sim" class="card hidden" style="margin-top: 1rem;">
+                    <div style="display:flex; justify-content:space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; margin-bottom: 2rem;">
+                        <div style="display: flex; gap: 1.5rem; align-items: center;">
+                            <button class="btn btn-back-custom" id="btn-back" onclick="closeSim()">← 돌아가기</button>
+                            <h2 style="margin: 0; font-size: 1.75rem;">시뮬레이션 스튜디오 <span id="selected-item-id" style="color:var(--primary);"></span></h2>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 0.9rem; color: #64748b;">예상 득점률</div>
+                            <div id="sim-scoring-rate" style="font-weight:700; font-size:1.75rem;">-</div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 3rem;">
+                        <!-- Left Panel: Distribution & Option Config -->
+                        <div style="flex: 1; min-width: 0;">
+                            
+                            <h4>선지별 득점 분포</h4>
+                            <div style="margin-top: 0.5rem; margin-bottom: 2rem; height: 400px;">
+                                <canvas id="distChart" style="width: 100%; height: 100%;"></canvas>
+                            </div>
+
+                            <h4>선지 선택 비중 및 이월 시뮬레이션</h4>
+                            <p style="font-size:0.85rem; color:#64748b; margin-top:0.25rem; margin-bottom:1rem;">중간 선지 삭제 시, 해당 기업들은 '가장 높은 그 다음 하위 선지'로 이동합니다.</p>
+                            
+                            <div class="dist-grid" id="sim-distribution" style="margin-bottom: 2rem;">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: CV Chart -->
+                        <div style="flex: 1; min-width: 0; border-left: 1px solid var(--border); padding-left: 3rem;">
+                            <h4>유형별 배점 변동계수(CV) 변화 추이</h4>
+                            
+                            <div class="chart-container" style="margin-top: 0.5rem; padding-top: 0; border: none; height: 400px;">
+                                <canvas id="cvChart"></canvas>
+                            </div>
+                            <p style="font-size:0.85rem; color:#64748b; margin-top:0.5rem;">CV = (유형별 배점비율의 표준편차) / (평균 배점비율)</p>
+
+                            <div style="margin-top: 2.5rem;">
+                                <h4>최고 배점 조정 (CV 컷오프)</h4>
+                                <div class="score-selector" style="margin-top:0.75rem;">
+                                    <button class="score-btn" data-val="2" style="padding: 0.75rem 1.5rem; font-size: 1rem;">2점</button>
+                                    <button class="score-btn" data-val="3" style="padding: 0.75rem 1.5rem; font-size: 1rem;">3점</button>
+                                    <button class="score-btn" data-val="5" style="padding: 0.75rem 1.5rem; font-size: 1rem;">5점</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VISUALIZATION VIEW -->
+                <section id="view-viz" class="card hidden" style="margin-top: 1rem;">
+                    <div style="display:flex; justify-content:space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; margin-bottom: 1.5rem;">
+                        <div style="display: flex; gap: 1.5rem; align-items: center;">
+                            <button class="btn btn-back-custom" onclick="closeViz()">← 돌아가기</button>
+                            <h2 style="margin: 0; font-size: 1.75rem;">문항 공간좌표 시각화 (3D Scatter)</h2>
+                        </div>
+                    </div>
+
+                    <div id="viz-btn-row" style="margin-bottom: 1rem; display: flex; flex-wrap: wrap;"></div>
+                    <div id="canvas-wrap">
+                        <canvas id="vizCanvas" height="550"></canvas>
+                        <div id="viz-tooltip"></div>
+                    </div>
+                    <div id="viz-legend"></div>
+                    <div id="viz-axis-info">
+                        <span>X축: 유형 (정책=-1, 목표=0, 위험관리=1, 성과=2)</span>
+                        <span>Y축: 만점 (점수)</span>
+                        <span>Z축: 득점률 (스케일 적용)</span>
+                    </div>
+                    <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">드래그: 회전 | 휠: 줌 | 점 위에 마우스: 상세 정보</div>
+                </section>
+            </div>
+        </main>
+    </div>
+    <!-- TOP Button -->
+    <button id="btn-top" class="btn-top">TOP</button>
+
+    <!-- Criteria Modal -->
+    <div id="modal-criteria" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:3000; display:none; align-items:center; justify-content:center;">
+        <div class="card" style="width: 440px; position: relative; padding: 2.2rem; background: #fff; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);">
+            <button onclick="closeCriteriaModal()" style="position: absolute; top: 1.2rem; right: 1.2rem; background: #f1f5f9; border: none; border-radius: 6px; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #64748b;">✕</button>
+            <h3 style="margin-top: 0; color: var(--primary); margin-bottom: 1.2rem; border-bottom: 2px solid #f5f3ff; padding-bottom: 0.75rem; font-size: 1.25rem;">문항 판단 기준 안내</h3>
+            <div style="display: flex; flex-direction: column; gap: 1.2rem;">
+                <div>
+                    <strong style="color: #b91c1c; display: block; margin-bottom: 0.3rem; font-size: 0.95rem;">● 난이도 상</strong>
+                    <p style="font-size: 0.88rem; color: #475569; line-height: 1.5; margin: 0;">세부 유형 내에서 득점률이 가장 낮으면서,<br>동시에 득점률이 <strong>50% 미만</strong>인 문항입니다.<br><span style="font-size: 11px; color:#d946ef; font-weight:600;">(※ 문항수가 적은 유형은 유형 전체 기준 적용)</span></p>
+                </div>
+                <div>
+                    <strong style="color: #15803d; display: block; margin-bottom: 0.3rem; font-size: 0.95rem;">● 난이도 하</strong>
+                    <p style="font-size: 0.88rem; color: #475569; line-height: 1.5; margin: 0;">세부 유형 내에서 득점률이 가장 높으면서,<br>동시에 득점률이 <strong>50% 이상</strong>인 문항입니다.<br><span style="font-size: 11px; color:#d946ef; font-weight:600;">(※ 문항수가 적은 유형은 유형 전체 기준 적용)</span></p>
+                </div>
+                <div>
+                    <strong style="color: #c2410c; display: block; margin-bottom: 0.3rem; font-size: 0.95rem;">● 양극화</strong>
+                    <p style="font-size: 0.88rem; color: #475569; line-height: 1.5; margin: 0;">중간 점수대의 선지를 선택한 기업이 없거나(0% 선택), 전체 선지 중 가장 적은 수의 기업이 선택한 선지가 중간에 존재하는 경우입니다.</p>
+                </div>
+            </div>
+            <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #f1f5f9; font-size: 0.8rem; color: #94a3b8; text-align: center;">
+                ※ 시범 문항(0점)은 위 기준에서 제외됩니다.
+            </div>
+        </div>
+    </div>
+
+    <!-- Reusable Multi-select Filter Menu -->
+    <div id="filter-menu" class="filter-menu hidden">
+        <input type="text" class="filter-menu-search" id="filter-search" placeholder="항목 검색...">
+        <div class="filter-item" id="filter-select-all-wrapper">
+            <input type="checkbox" id="filter-select-all">
+            <label for="filter-select-all" style="cursor:pointer; font-weight:700;">전체 선택</label>
+        </div>
+        <div class="filter-menu-list" id="filter-list">
+            <!-- Dynamically populated -->
+        </div>
+        <div class="filter-menu-btns">
+            <button class="filter-btn filter-btn-cancel" onclick="closeFilterMenu()">취소</button>
+            <button class="filter-btn filter-btn-ok" id="filter-apply-btn">확인</button>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

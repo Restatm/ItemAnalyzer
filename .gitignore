@@ -1,0 +1,14 @@
+# Data Files (IMPORTANT: Never upload corporate data)
+*.xlsx
+*.xls
+*.csv
+*.ods
+*.db
+
+# OS Files
+Thumbs.db
+.DS_Store
+
+# Temporary files
+/tmp/
+*.log
