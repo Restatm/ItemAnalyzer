@@ -27,8 +27,12 @@ let simulatedItemState = null; // Holds the state of the item being simulated
 // 3D Visualization State
 let vizState = {
     canvas: null,
-    ctx: null,
+    // 3D Viz State
     pts: [],
+    // Bar Chart Instances
+    barChartType: null,
+    barChartCat: null,
+    activeTab: '3d',
     categories: [],
     catColors: {
         "노동관행": "#5B7FDB",
@@ -105,6 +109,165 @@ document.getElementById('filter-search').addEventListener('input', (e) => {
 window.addEventListener('scroll', () => {
     updateFilterMenuPosition();
 }, { capture: true, passive: true });
+
+function switchVizTab(tab) {
+    vizState.activeTab = tab;
+    const btn3d = document.getElementById('tab-viz-3d');
+    const btnBar = document.getElementById('tab-viz-bar');
+    const content3d = document.getElementById('viz-3d-content');
+    const contentBar = document.getElementById('viz-bar-content');
+
+    if (tab === '3d') {
+        btn3d.classList.add('active');
+        btnBar.classList.remove('active');
+        content3d.classList.remove('hidden');
+        contentBar.classList.add('hidden');
+        initViz();
+    } else {
+        btn3d.classList.remove('active');
+        btnBar.classList.add('active');
+        content3d.classList.add('hidden');
+        contentBar.classList.remove('hidden');
+        initBarCharts();
+    }
+}
+
+function filterVizBar(filter) {
+    const btns = document.querySelectorAll('.btn-viz-bar-filter');
+    btns.forEach(btn => {
+        btn.classList.add('btn-reset');
+        btn.classList.remove('btn-criteria', 'active');
+    });
+
+    const activeBtn = document.getElementById(`btn-viz-bar-${filter}`);
+    activeBtn.classList.remove('btn-reset');
+    activeBtn.classList.add('btn-criteria', 'active');
+
+    const wrapperType = document.getElementById('wrapper-viz-bar-type');
+    const wrapperCat = document.getElementById('wrapper-viz-bar-cat');
+
+    if (filter === 'all') {
+        wrapperType.style.display = 'block';
+        wrapperCat.style.display = 'block';
+    } else if (filter === 'type') {
+        wrapperType.style.display = 'block';
+        wrapperCat.style.display = 'none';
+    } else {
+        wrapperType.style.display = 'none';
+        wrapperCat.style.display = 'block';
+    }
+}
+
+function initBarCharts() {
+    const items = globalData.items.filter(it => it.maxScore > 0);
+    if (items.length === 0) return;
+
+    // 1. 계산
+    const totalAvg = items.reduce((sum, it) => sum + it.scoringRate, 0) / items.length;
+
+    // 유형별 (정책, 목표, 위험관리, 성과)
+    const types = ["정책", "목표", "위험관리", "성과"];
+    const typeData = types.map(t => {
+        const sub = items.filter(it => it.type === t);
+        return sub.length > 0 ? sub.reduce((sum, it) => sum + it.scoringRate, 0) / sub.length : 0;
+    });
+
+    // 대분류별
+    const cats = globalData.categories;
+    const catData = cats.map(c => {
+        const sub = items.filter(it => it.category === c);
+        return sub.length > 0 ? sub.reduce((sum, it) => sum + it.scoringRate, 0) / sub.length : 0;
+    });
+
+    // 2. 렌더링
+    renderSingleBarChart('vizBarChartType', ["전체 평균", ...types], [totalAvg, ...typeData], "유형별 평균 득점률", totalAvg, 'barChartType');
+    renderSingleBarChart('vizBarChartCat', ["전체 평균", ...cats], [totalAvg, ...catData], "대분류별 평균 득점률", totalAvg, 'barChartCat');
+}
+
+function renderSingleBarChart(canvasId, labels, data, label, totalAvg, instanceKey) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    
+    // 파스텔 팔레트
+    const pastelColors = [
+        'rgba(203, 213, 225, 0.7)', // 전체 평균용 (Slate 300)
+        'rgba(252, 165, 165, 0.7)', // Red
+        'rgba(147, 197, 253, 0.7)', // Blue
+        'rgba(167, 243, 208, 0.7)', // Green
+        'rgba(254, 240, 138, 0.7)', // Yellow
+        'rgba(245, 208, 254, 0.7)', // Fuchsia
+        'rgba(253, 230, 138, 0.7)', // Amber
+        'rgba(199, 210, 254, 0.7)', // Indigo
+        'rgba(221, 214, 254, 0.7)'  // Violet
+    ];
+
+    const backgroundColors = labels.map((l, i) => i === 0 ? '#64748b' : pastelColors[((i - 1) % (pastelColors.length - 1)) + 1]);
+    const borderColors = labels.map((l, i) => i === 0 ? '#475569' : backgroundColors[i].replace('0.7', '1'));
+
+    if (vizState[instanceKey]) {
+        vizState[instanceKey].destroy();
+    }
+
+    vizState[instanceKey] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: label,
+                data: data,
+                backgroundColor: backgroundColors,
+                borderColor: borderColors,
+                borderWidth: 1,
+                barPercentage: 0.6,
+                maxBarThickness: 100
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: { callback: v => v + '%' },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                },
+                x: {
+                    grid: { display: false }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => ` ${ctx.raw.toFixed(1)}%`
+                    }
+                }
+            }
+        },
+        plugins: [{
+            id: 'avgLine',
+            afterDraw: (chart) => {
+                const {ctx, chartArea: {left, right, top, bottom}, scales: {y}} = chart;
+                ctx.save();
+                ctx.setLineDash([5, 5]);
+                ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)'; // Red 500
+                ctx.lineWidth = 2;
+                const yPos = y.getPixelForValue(totalAvg);
+                ctx.beginPath();
+                ctx.moveTo(left, yPos);
+                ctx.lineTo(right, yPos);
+                ctx.stroke();
+
+                // 텍스트 라벨
+                ctx.fillStyle = '#ef4444';
+                ctx.font = 'bold 12px Pretendard';
+                ctx.textAlign = 'right';
+                ctx.fillText(`전체 평균: ${totalAvg.toFixed(1)}%`, right, yPos - 8);
+                ctx.restore();
+            }
+        }]
+    });
+}
 
 function updateFilterMenuPosition() {
     if (!activeFilterCol) return;
@@ -1155,6 +1318,11 @@ function renderCVChart(baseCvs, simCvs = null) {
 }
 
 // ── 3D Visualization Implementation ──
+
+function openViz() {
+    showView('view-viz');
+    switchVizTab(vizState.activeTab); 
+}
 
 function initViz() {
     if (!vizState.canvas) {

@@ -464,22 +464,48 @@
                     <div style="display:flex; justify-content:space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; margin-bottom: 1.5rem;">
                         <div style="display: flex; gap: 1.5rem; align-items: center;">
                             <button class="btn btn-back-custom" onclick="closeViz()">← 돌아가기</button>
-                            <h2 style="margin: 0; font-size: 1.75rem;">문항 공간좌표 시각화 (3D Scatter)</h2>
+                            <h2 id="viz-main-title" style="margin: 0; font-size: 1.75rem;">데이터 시각화 스튜디오</h2>
+                        </div>
+                        <div class="score-selector" style="margin: 0;">
+                            <button id="tab-viz-3d" class="score-btn active" onclick="switchVizTab('3d')" style="padding: 0.6rem 1.2rem; min-width: 180px;">공간 좌표 시각화(3D)</button>
+                            <button id="tab-viz-bar" class="score-btn" onclick="switchVizTab('bar')" style="padding: 0.6rem 1.2rem; min-width: 140px;">득점률 현황</button>
                         </div>
                     </div>
 
-                    <div id="viz-btn-row" style="margin-bottom: 1rem; display: flex; flex-wrap: wrap;"></div>
-                    <div id="canvas-wrap">
-                        <canvas id="vizCanvas" height="550"></canvas>
-                        <div id="viz-tooltip"></div>
+                    <!-- 3D Scatter Plot Section -->
+                    <div id="viz-3d-content">
+                        <div id="viz-btn-row" style="margin-bottom: 1rem; display: flex; flex-wrap: wrap;"></div>
+                        <div id="canvas-wrap">
+                            <canvas id="vizCanvas" height="550"></canvas>
+                            <div id="viz-tooltip"></div>
+                        </div>
+                        <div id="viz-legend"></div>
+                        <div id="viz-axis-info">
+                            <span>X축: 유형 (정책=-1, 목표=0, 위험관리=1, 성과=2)</span>
+                            <span>Y축: 만점 (점수)</span>
+                            <span>Z축: 득점률 (스케일 적용)</span>
+                        </div>
+                        <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">드래그: 회전 | 휠: 줌 | 점 위에 마우스: 상세 정보</div>
                     </div>
-                    <div id="viz-legend"></div>
-                    <div id="viz-axis-info">
-                        <span>X축: 유형 (정책=-1, 목표=0, 위험관리=1, 성과=2)</span>
-                        <span>Y축: 만점 (점수)</span>
-                        <span>Z축: 득점률 (스케일 적용)</span>
+
+                    <!-- Bar Chart Section -->
+                    <div id="viz-bar-content" class="hidden">
+                        <div style="margin-bottom: 2rem; display: flex; gap: 0.75rem;">
+                            <button class="btn btn-small btn-criteria btn-viz-bar-filter active" id="btn-viz-bar-all" onclick="filterVizBar('all')">전체</button>
+                            <button class="btn btn-small btn-reset btn-viz-bar-filter" id="btn-viz-bar-type" onclick="filterVizBar('type')">유형별</button>
+                            <button class="btn btn-small btn-reset btn-viz-bar-filter" id="btn-viz-bar-cat" onclick="filterVizBar('cat')">대분류별</button>
+                        </div>
+                        <div id="viz-bar-charts-container" style="display: flex; flex-direction: column; gap: 3rem;">
+                            <div id="wrapper-viz-bar-type" style="height: 450px;">
+                                <h4 style="margin-bottom: 1rem; color: #475569;">01. 개괄 - 유형별 평균 득점률</h4>
+                                <canvas id="vizBarChartType"></canvas>
+                            </div>
+                            <div id="wrapper-viz-bar-cat" style="height: 450px;">
+                                <h4 style="margin-bottom: 1rem; color: #475569;">02. 개괄 - 대분류별 평균 득점률</h4>
+                                <canvas id="vizBarChartCat"></canvas>
+                            </div>
+                        </div>
                     </div>
-                    <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">드래그: 회전 | 휠: 줌 | 점 위에 마우스: 상세 정보</div>
                 </section>
             </div>
         </main>
